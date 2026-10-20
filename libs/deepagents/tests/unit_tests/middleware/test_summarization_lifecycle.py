@@ -241,6 +241,7 @@ async def test_manual_compaction_reports_ordinary_summary_errors(tmp_path: Path,
 
     assert result["messages"][-1].text == "Complete"
     tool = next(message for message in result["messages"] if isinstance(message, ToolMessage))
+    assert tool.status == "error"
     assert "Compaction failed" in tool.text
     assert "summary unavailable" in tool.text
 
@@ -254,6 +255,7 @@ async def test_manual_compaction_keeps_small_conversations(tmp_path: Path, *, as
 
     assert result["messages"][-1].text == "Complete"
     tool = next(message for message in result["messages"] if isinstance(message, ToolMessage))
+    assert tool.status == "success"
     assert "Nothing to compact yet" in tool.text
 
 
