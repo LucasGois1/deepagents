@@ -89,6 +89,7 @@ from langchain.tools import (
 from langchain_core.exceptions import ContextOverflowError
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage, ToolCall, ToolMessage, get_buffer_string
 from langchain_core.messages.utils import count_tokens_approximately
+from langgraph.errors import GraphBubbleUp
 from langgraph.types import Command
 from pydantic import BaseModel
 from typing_extensions import TypedDict
@@ -1112,6 +1113,8 @@ A condensed summary follows:
                         failed_keys.add(key)
                         continue
                     path_map[key] = img_path
+                except GraphBubbleUp:
+                    raise
                 except Exception as e:  # noqa: BLE001
                     logger.warning(
                         "Failed to upload media %s to backend: %s: %s",
@@ -1165,6 +1168,8 @@ A condensed summary follows:
                         failed_keys.add(key)
                         continue
                     path_map[key] = img_path
+                except GraphBubbleUp:
+                    raise
                 except Exception as e:  # noqa: BLE001
                     logger.warning(
                         "Failed to upload media %s to backend: %s: %s",
@@ -1221,6 +1226,8 @@ A condensed summary follows:
             responses = backend.download_files([path])
             if responses and responses[0].content is not None and responses[0].error is None:
                 existing_content = responses[0].content.decode("utf-8")
+        except GraphBubbleUp:
+            raise
         except Exception as e:  # noqa: BLE001
             # File likely doesn't exist yet, but log for observability
             logger.debug(
@@ -1243,6 +1250,8 @@ A condensed summary follows:
                     error_msg,
                 )
                 return None
+        except GraphBubbleUp:
+            raise
         except Exception as e:  # noqa: BLE001
             logger.warning(
                 "Exception offloading conversation history to %s (%d messages): %s: %s",
@@ -1298,6 +1307,8 @@ A condensed summary follows:
             responses = await backend.adownload_files([path])
             if responses and responses[0].content is not None and responses[0].error is None:
                 existing_content = responses[0].content.decode("utf-8")
+        except GraphBubbleUp:
+            raise
         except Exception as e:  # noqa: BLE001
             # File likely doesn't exist yet, but log for observability
             logger.debug(
@@ -1322,6 +1333,8 @@ A condensed summary follows:
                     error_msg,
                 )
                 return None
+        except GraphBubbleUp:
+            raise
         except Exception as e:  # noqa: BLE001
             logger.warning(
                 "Exception offloading conversation history to %s (%d messages): %s: %s",
@@ -2083,7 +2096,9 @@ class SummarizationToolMiddleware(AgentMiddleware):
             to_summarize, _ = s._partition_messages(effective, cutoff)
             summary = s._create_summary(to_summarize)
             file_path = s._offload_to_backend(s._backend, to_summarize, session_id)
-        except Exception as exc:  # tool must return a ToolMessage, not raise
+        except GraphBubbleUp:
+            raise
+        except Exception as exc:
             logger.exception("compact_conversation tool failed")
             return self._compact_error(tool_call_id, exc)
 
@@ -2117,7 +2132,9 @@ class SummarizationToolMiddleware(AgentMiddleware):
             to_summarize, _ = s._partition_messages(effective, cutoff)
             summary = await s._acreate_summary(to_summarize)
             file_path = await s._aoffload_to_backend(s._backend, to_summarize, session_id)
-        except Exception as exc:  # tool must return a ToolMessage, not raise
+        except GraphBubbleUp:
+            raise
+        except Exception as exc:
             logger.exception("compact_conversation tool failed")
             return self._compact_error(tool_call_id, exc)
 
