@@ -1583,6 +1583,19 @@ A condensed summary follows:
                 self._raise_recovery_exhausted(exc)
             return await self._acall_with_budget(request, handler, error=exc)
 
+    async def _asummarize_and_offload(self, backend: BackendProtocol, messages: list[AnyMessage], session_id: str) -> tuple[str | None, str]:
+        """Finish admitted history offload before propagating a summary failure."""
+        file_path, summary = await asyncio.gather(
+            self._aoffload_to_backend(backend, messages, session_id),
+            self._acreate_summary(messages),
+            return_exceptions=True,
+        )
+        if isinstance(summary, BaseException):
+            raise summary
+        if isinstance(file_path, BaseException):
+            raise file_path
+        return file_path, summary
+
     def wrap_model_call(
         self,
         request: ModelRequest,
@@ -1806,10 +1819,7 @@ A condensed summary follows:
 
         # Offload to backend and generate summary concurrently -- they are independent.
         # If offload fails, summarization still proceeds (with file_path=None).
-        file_path, summary = await asyncio.gather(
-            self._aoffload_to_backend(backend, offloaded_media_messages, session_id),
-            self._acreate_summary(offloaded_media_messages),
-        )
+        file_path, summary = await self._asummarize_and_offload(backend, offloaded_media_messages, session_id)
         if file_path is None:
             msg = "Offloading conversation history to backend failed during summarization. Older messages will not be recoverable."
             logger.error(msg)
