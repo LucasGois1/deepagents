@@ -681,10 +681,15 @@ class StoreBackend(BackendProtocol):
         for path, content in files:
             try:
                 content_str = content.decode("utf-8")
-                encoding = "utf-8"
             except UnicodeDecodeError:
+                content_str = None
+
+            # PostgreSQL JSONB cannot persist NUL characters in text values.
+            if content_str is None or "\x00" in content_str:
                 content_str = base64.standard_b64encode(content).decode("ascii")
                 encoding = "base64"
+            else:
+                encoding = "utf-8"
 
             file_data = create_file_data(content_str, encoding=encoding)
             store_value = self._convert_file_data_to_store_value(file_data)
