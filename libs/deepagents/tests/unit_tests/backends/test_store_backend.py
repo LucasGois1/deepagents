@@ -11,6 +11,32 @@ from deepagents.backends.store import StoreBackend, _validate_namespace
 from deepagents.middleware.filesystem import FilesystemMiddleware
 
 
+@pytest.mark.parametrize("use_async", [False, True])
+@pytest.mark.parametrize(
+    ("content", "encoding"),
+    [
+        (b"\x00", "base64"),
+        (b"ASCII\x00", "base64"),
+        (b"\x00\xff", "base64"),
+        (b"", "utf-8"),
+        ("Ol\u00e1\r\n".encode(), "utf-8"),
+        (b"\xef\xbb\xbftext\r\n", "utf-8"),
+    ],
+)
+async def test_store_backend_upload_uses_json_safe_encoding_and_preserves_bytes(content: bytes, encoding: str, *, use_async: bool) -> None:
+    """NUL bytes need binary encoding even when the payload decodes as UTF-8."""
+    backend = StoreBackend(store=InMemoryStore(), namespace=lambda _rt: ("filesystem",))
+    files = [("/payload.bin", content)]
+    uploaded = await backend.aupload_files(files) if use_async else backend.upload_files(files)
+    assert len(uploaded) == 1 and uploaded[0].error is None
+    result = await backend.aread("/payload.bin") if use_async else backend.read("/payload.bin")
+    assert result.error is None and result.file_data is not None
+    assert result.file_data["encoding"] == encoding
+    downloaded = await backend.adownload_files(["/payload.bin"]) if use_async else backend.download_files(["/payload.bin"])
+    assert len(downloaded) == 1 and downloaded[0].error is None
+    assert downloaded[0].content == content
+
+
 def test_store_backend_crud_and_search():
     mem_store = InMemoryStore()
     be = StoreBackend(store=mem_store, namespace=lambda _rt: ("filesystem",))
